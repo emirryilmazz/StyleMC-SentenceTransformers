@@ -1,0 +1,23 @@
+services:
+  frontend:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - type: bind
+        source: ./ffhq.pkl
+        target: /python-docker/ffhq.pkl
+      - type: bind
+        source: ./model_ir_se50.pth
+        target: /python-docker/model_ir_se50.pth
+      - type: bind
+        source: ./encoder4editing/e4e_ffhq_encode.pt
+        target: /python-docker/e4e_ffhq_encode.pt
+      - type: bind
+        source: ./encoder4editing/shape_predictor_68_face_landmarks.dat
+        target: /python-docker/shape_predictor_68_face_landmarks.dat
+      - type: bind
+        source: ./encoder4editing/projected_w.npz
+        target: /python-docker/projected_w.npz
+volumes:
+  myapp:

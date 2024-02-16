@@ -239,6 +239,7 @@ def generate_images(
 
                 styles -= styles_direction*grad_change
                 img_filepath = '{}_video/{}_{}_{}.jpeg'.format(outdir, text_prompt.replace(" ", "_"), change_power, name_i)
+                print('file pathhh', img_filepath)
                 PIL.Image.fromarray(np.concatenate(imgs, axis=1), 'RGB').save(img_filepath, quality=95)
         else:
             imgs = []
@@ -264,8 +265,9 @@ def generate_images(
 
                 styles -= styles_direction*grad_change
 
-            img_filepath = f'{outdir}/'+text_prompt.replace(" ", "_")+'_'+str(change_power)+'.jpeg'
+            img_filepath = f'{outdir}/'+text_prompt.replace('"','').replace(" ", "_")+'_'+str(change_power)+'.jpeg'
             PIL.Image.fromarray(np.concatenate(imgs, axis=1), 'RGB').save(img_filepath, quality=95)
+            print('file pathhh 2', text_prompt)
 
         print("time passed:", time.time()-t1)
 

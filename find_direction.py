@@ -25,7 +25,7 @@ import torch
 from torch import linalg as LA
 import torch.nn.functional as F
 import torchvision
-from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
+from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize, InterpolationMode
 import PIL.Image
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -133,6 +133,8 @@ def generate_images(
     batch_size: int,
     identity_power: str,
 ):
+    # parameters print
+    # print('params', network_pkl, seeds, truncation_psi, noise_mode, outdir, class_idx, projected_w, projected_w, batch_size, identity_power, text_prompt, resolution)
     """
     Generate images using pretrained network pickle.
 
@@ -142,8 +144,7 @@ def generate_images(
         --network=https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/metfaces.pkl
 
     # Generate uncurated MetFaces images with truncation (Fig.12 upper left)
-    python generate.py --outdir=out --trunc=0.7 --seeds=600-605 \\
-        --network=https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/metfaces.pkl
+    python generate.py --outdir=out --trunc=0.7 --seeds=600-605 --network=https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/metfaces.pkl
 
     # Generate class conditional CIFAR-10 images (Fig.17 left, Car)
     python generate.py --outdir=out --seeds=0-35 --class=1 \\
@@ -153,14 +154,12 @@ def generate_images(
     python generate.py --outdir=out --projected_w=projected_w.npz \\
         --network=https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/metfaces.pkl
     """
-
     print('Loading networks from "%s"...' % network_pkl)
     device = torch.device('cuda')
     with dnnlib.util.open_url(network_pkl) as f:
         G = legacy.load_network_pkl(f)['G_ema'].to(device)  # type: ignore
 
     os.makedirs(outdir, exist_ok=True)
-
     # Synthesize the result of a W projection
     if projected_w is not None:
         if seeds is not None:
@@ -203,7 +202,7 @@ def generate_images(
     if std.ndim == 1:
         std = std.view(-1, 1, 1)
 
-    transf = Compose([Resize(224, interpolation=Image.BICUBIC), CenterCrop(224)])
+    transf = Compose([Resize(224, interpolation=InterpolationMode.BICUBIC, ), CenterCrop(224)])
 
     styles_array = []
     print("seeds:", seeds)
@@ -256,6 +255,7 @@ def generate_images(
 
     resolution_dict = {256: 6, 512: 7, 1024: 8}
     id_coeff_dict = {"high": 2, "medium": 0.5, "low": 0.1, "none": 0}
+    print('power', identity_power)
     id_coeff = id_coeff_dict[identity_power]
     styles_direction = torch.zeros(1, 26, 512, device=device)
     styles_direction_grad_el2 = torch.zeros(1, 26, 512, device=device)

@@ -23,6 +23,11 @@ opts = vars(args)
 print(opts)
 image_path = opts["input_image"]
 
+def change_opts_for_image_path(img_path: str):
+    global opts
+    opts = vars(args)
+    opts["input_image"] = img_path
+
 def get_download_model_command(file_id, file_name):
     """ Get wget download command for downloading the desired model and save to directory pretrained_models. """
     current_directory = os.getcwd()
