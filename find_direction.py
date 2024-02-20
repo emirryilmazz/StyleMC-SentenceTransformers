@@ -17,6 +17,11 @@ import click
 import legacy
 from typing import List, Optional
 
+from sentence_transformers import SentenceTransformer, util
+from PIL import Image as PILImage, ImageFile as PILImageFile
+import requests
+import torch
+
 import cv2
 import clip
 import dnnlib
@@ -40,47 +45,46 @@ import id_loss
 
 
 def block_forward(self, x, img, ws, shapes, force_fp32=False, fused_modconv=None, **layer_kwargs):
-        misc.assert_shape(ws, [None, self.num_conv + self.num_torgb, self.w_dim])
-        w_iter = iter(ws.unbind(dim=1))
-        dtype = torch.float16 if self.use_fp16 and not force_fp32 else torch.float32
-        memory_format = torch.channels_last if self.channels_last and not force_fp32 else torch.contiguous_format
-        if fused_modconv is None:
-            with misc.suppress_tracer_warnings(): # this value will be treated as a constant
-                fused_modconv = (not self.training) and (dtype == torch.float32 or int(x.shape[0]) == 1)
+    misc.assert_shape(ws, [None, self.num_conv + self.num_torgb, self.w_dim])
+    w_iter = iter(ws.unbind(dim=1))
+    dtype = torch.float16 if self.use_fp16 and not force_fp32 else torch.float32
+    memory_format = torch.channels_last if self.channels_last and not force_fp32 else torch.contiguous_format
+    if fused_modconv is None:
+        with misc.suppress_tracer_warnings():  # this value will be treated as a constant
+            fused_modconv = (not self.training) and (dtype == torch.float32 or int(x.shape[0]) == 1)
 
-        # Input.
-        if self.in_channels == 0:
-            x = self.const.to(dtype=dtype, memory_format=memory_format)
-            x = x.unsqueeze(0).repeat([ws.shape[0], 1, 1, 1])
-        else:
-            misc.assert_shape(x, [None, self.in_channels, self.resolution // 2, self.resolution // 2])
-            x = x.to(dtype=dtype, memory_format=memory_format)
+    # Input.
+    if self.in_channels == 0:
+        x = self.const.to(dtype=dtype, memory_format=memory_format)
+        x = x.unsqueeze(0).repeat([ws.shape[0], 1, 1, 1])
+    else:
+        misc.assert_shape(x, [None, self.in_channels, self.resolution // 2, self.resolution // 2])
+        x = x.to(dtype=dtype, memory_format=memory_format)
 
-        # Main layers.
-        if self.in_channels == 0:
-            x = self.conv1(x, next(w_iter)[...,:shapes[0]], fused_modconv=fused_modconv, **layer_kwargs)
-        elif self.architecture == 'resnet':
-            y = self.skip(x, gain=np.sqrt(0.5))
-            x = self.conv0(x, next(w_iter), fused_modconv=fused_modconv, **layer_kwargs)
-            x = self.conv1(x, next(w_iter), fused_modconv=fused_modconv, gain=np.sqrt(0.5), **layer_kwargs)
-            x = y.add_(x)
-        else:
-            x = self.conv0(x, next(w_iter)[...,:shapes[0]], fused_modconv=fused_modconv, **layer_kwargs)
-            x = self.conv1(x, next(w_iter)[...,:shapes[1]], fused_modconv=fused_modconv, **layer_kwargs)
+    # Main layers.
+    if self.in_channels == 0:
+        x = self.conv1(x, next(w_iter)[..., :shapes[0]], fused_modconv=fused_modconv, **layer_kwargs)
+    elif self.architecture == 'resnet':
+        y = self.skip(x, gain=np.sqrt(0.5))
+        x = self.conv0(x, next(w_iter), fused_modconv=fused_modconv, **layer_kwargs)
+        x = self.conv1(x, next(w_iter), fused_modconv=fused_modconv, gain=np.sqrt(0.5), **layer_kwargs)
+        x = y.add_(x)
+    else:
+        x = self.conv0(x, next(w_iter)[..., :shapes[0]], fused_modconv=fused_modconv, **layer_kwargs)
+        x = self.conv1(x, next(w_iter)[..., :shapes[1]], fused_modconv=fused_modconv, **layer_kwargs)
 
-        # ToRGB.
-        if img is not None:
-            misc.assert_shape(img, [None, self.img_channels, self.resolution // 2, self.resolution // 2])
-            img = upfirdn2d.upsample2d(img, self.resample_filter)
-        if self.is_last or self.architecture == 'skip':
-            y = self.torgb(x, next(w_iter)[...,:shapes[2]], fused_modconv=fused_modconv)
-            y = y.to(dtype=torch.float32, memory_format=torch.contiguous_format)
-            img = img.add_(y) if img is not None else y
+    # ToRGB.
+    if img is not None:
+        misc.assert_shape(img, [None, self.img_channels, self.resolution // 2, self.resolution // 2])
+        img = upfirdn2d.upsample2d(img, self.resample_filter)
+    if self.is_last or self.architecture == 'skip':
+        y = self.torgb(x, next(w_iter)[..., :shapes[2]], fused_modconv=fused_modconv)
+        y = y.to(dtype=torch.float32, memory_format=torch.contiguous_format)
+        img = img.add_(y) if img is not None else y
 
-        assert x.dtype == dtype
-        assert img is None or img.dtype == torch.float32
-        return x, img
-
+    assert x.dtype == dtype
+    assert img is None or img.dtype == torch.float32
+    return x, img
 
 
 def unravel_index(index, shape):
@@ -110,7 +114,8 @@ def num_range(s: str) -> List[int]:
 @click.option('--seeds', type=num_range, help='List of random seeds')
 @click.option('--trunc', 'truncation_psi', type=float, help='Truncation psi', default=1, show_default=True)
 @click.option('--class', 'class_idx', type=int, help='Class label (unconditional if not specified)')
-@click.option('--noise-mode', help='Noise mode', type=click.Choice(['const', 'random', 'none']), default='const', show_default=True)
+@click.option('--noise-mode', help='Noise mode', type=click.Choice(['const', 'random', 'none']), default='const',
+              show_default=True)
 @click.option('--projected-w', help='Projection result file', type=str, metavar='FILE')
 @click.option('--projected_s', help='Projection result file', type=str, metavar='FILE')
 @click.option('--outdir', help='Where to save the output images', type=str, required=True, metavar='DIR')
@@ -119,19 +124,19 @@ def num_range(s: str) -> List[int]:
 @click.option('--batch_size', help='Batch Size', type=int, required=True)
 @click.option('--identity_power', help='How much change occurs on the face', type=str, required=True)
 def generate_images(
-    ctx: click.Context,
-    network_pkl: str,
-    seeds: Optional[List[int]],
-    truncation_psi: float,
-    noise_mode: str,
-    outdir: str,
-    class_idx: Optional[int],
-    projected_w: Optional[str],
-    projected_s: Optional[str],
-    text_prompt: str,
-    resolution: int,
-    batch_size: int,
-    identity_power: str,
+        ctx: click.Context,
+        network_pkl: str,
+        seeds: Optional[List[int]],
+        truncation_psi: float,
+        noise_mode: str,
+        outdir: str,
+        class_idx: Optional[int],
+        projected_w: Optional[str],
+        projected_s: Optional[str],
+        text_prompt: str,
+        resolution: int,
+        batch_size: int,
+        identity_power: str,
 ):
     # parameters print
     # print('params', network_pkl, seeds, truncation_psi, noise_mode, outdir, class_idx, projected_w, projected_w, batch_size, identity_power, text_prompt, resolution)
@@ -171,7 +176,7 @@ def generate_images(
         for idx, w in enumerate(ws):
             img = G.synthesis(w.unsqueeze(0), noise_mode=noise_mode)
             img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)
-            img = PIL.Image.fromarray(img[0].cpu().numpy(), 'RGB').save(f'{outdir}/proj{idx:02d}.png')
+            img = PILImage.fromarray(img[0].cpu().numpy(), 'RGB').save(f'{outdir}/proj{idx:02d}.png')
         return
 
     if seeds is None:
@@ -187,9 +192,27 @@ def generate_images(
         if class_idx is not None:
             print('warn: --class=lbl ignored when running on an unconditional network')
 
+    # sentence transformer
+    """device_2 = "cuda" if torch.cuda.is_available() else "cpu"
+
+    model, preprocess = clip.load("ViT-B/32", device=device_2)
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    text_model = SentenceTransformer('sentence-transformers/clip-ViT-B-32-multilingual-v1')
+    # text_features = text_model.encode(text.tolist())
+    text_features = text_model.encode(text_prompt)
+    print("text_features:", text_features.shape)
+    text_features = torch.unsqueeze(torch.tensor(text_features), 0).to(device)
+    print("shapee:", text_features.shape)
+    print("text_features_2_type:", type(text_features))"""
+
+
     model, preprocess = clip.load("ViT-B/32", device=device)
     text = clip.tokenize([text_prompt]).to(device)
+    print("text", text.shape)
     text_features = model.encode_text(text)
+    print("shape_2: ", text_features.shape)
+    print("text_features_type:", type(text_features))
 
     # Generate images
     for i in G.parameters():
@@ -231,7 +254,8 @@ def generate_images(
             block = getattr(G.synthesis, f'b{res}')
 
             if res == 4:
-                temp_shape = (block.conv1.affine.weight.shape[0], block.conv1.affine.weight.shape[0], block.torgb.affine.weight.shape[0])
+                temp_shape = (block.conv1.affine.weight.shape[0], block.conv1.affine.weight.shape[0],
+                              block.torgb.affine.weight.shape[0])
                 styles[0, :1, :] = block.conv1.affine(cur_ws[0, :1, :])
                 styles[0, 1:2, :] = block.torgb.affine(cur_ws[0, 1:2, :])
                 if seed_idx == (len(seeds) - 1):
@@ -239,10 +263,11 @@ def generate_images(
                     block.torgb.affine = torch.nn.Identity()
                 styles_idx += 2
             else:
-                temp_shape = (block.conv0.affine.weight.shape[0], block.conv1.affine.weight.shape[0], block.torgb.affine.weight.shape[0])
-                styles[0,styles_idx:styles_idx+1,:temp_shape[0]] = block.conv0.affine(cur_ws[0,:1,:])
-                styles[0,styles_idx+1:styles_idx+2,:temp_shape[1]] = block.conv1.affine(cur_ws[0,1:2,:])
-                styles[0,styles_idx+2:styles_idx+3,:temp_shape[2]] = block.torgb.affine(cur_ws[0,2:3,:])
+                temp_shape = (block.conv0.affine.weight.shape[0], block.conv1.affine.weight.shape[0],
+                              block.torgb.affine.weight.shape[0])
+                styles[0, styles_idx:styles_idx + 1, :temp_shape[0]] = block.conv0.affine(cur_ws[0, :1, :])
+                styles[0, styles_idx + 1:styles_idx + 2, :temp_shape[1]] = block.conv1.affine(cur_ws[0, 1:2, :])
+                styles[0, styles_idx + 2:styles_idx + 3, :temp_shape[2]] = block.torgb.affine(cur_ws[0, 2:3, :])
                 if seed_idx == (len(seeds) - 1):
                     block.conv0.affine = torch.nn.Identity()
                     block.conv1.affine = torch.nn.Identity()
@@ -269,7 +294,7 @@ def generate_images(
     for i in range(math.ceil(len(seeds) / batch_size)):
         # print(i*batch_size, "processed", time.time()-t1)
 
-        styles = torch.vstack(styles_array[i*batch_size:(i+1)*batch_size]).to(device)
+        styles = torch.vstack(styles_array[i * batch_size:(i + 1) * batch_size]).to(device)
         seed = seeds[i]
 
         styles_idx = 0
@@ -281,10 +306,12 @@ def generate_images(
                 continue
 
             if res == 4:
-                x2, img2 = block_forward(block, x2, img2, styles[:, styles_idx:styles_idx+2, :], temp_shapes[k], noise_mode=noise_mode)
+                x2, img2 = block_forward(block, x2, img2, styles[:, styles_idx:styles_idx + 2, :], temp_shapes[k],
+                                         noise_mode=noise_mode)
                 styles_idx += 2
             else:
-                x2, img2 = block_forward(block, x2, img2, styles[:, styles_idx:styles_idx+3, :], temp_shapes[k], noise_mode=noise_mode)
+                x2, img2 = block_forward(block, x2, img2, styles[:, styles_idx:styles_idx + 3, :], temp_shapes[k],
+                                         noise_mode=noise_mode)
                 styles_idx += 3
 
         img2_cpu = img2.detach().cpu().numpy()
@@ -301,10 +328,12 @@ def generate_images(
             if k > resolution_dict[resolution]:
                 continue
             if res == 4:
-                x, img = block_forward(block, x, img, styles2[:, styles_idx:styles_idx+2, :], temp_shapes[k], noise_mode=noise_mode)
+                x, img = block_forward(block, x, img, styles2[:, styles_idx:styles_idx + 2, :], temp_shapes[k],
+                                       noise_mode=noise_mode)
                 styles_idx += 2
             else:
-                x, img = block_forward(block, x, img, styles2[:, styles_idx:styles_idx+3, :], temp_shapes[k], noise_mode=noise_mode)
+                x, img = block_forward(block, x, img, styles2[:, styles_idx:styles_idx + 3, :], temp_shapes[k],
+                                       noise_mode=noise_mode)
                 styles_idx += 3
 
         identity_loss, _ = id_loss(img, img2)
@@ -312,7 +341,7 @@ def generate_images(
         img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255)
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
         image_features = model.encode_image(img)
-        cos_sim = -1*F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
+        cos_sim = -1 * F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
         (identity_loss + cos_sim.sum()).backward(retain_graph=True)
 
     t1 = time.time()
@@ -324,7 +353,7 @@ def generate_images(
         print(i * batch_size, "processed", time.time() - t1)
 
         seed = seeds[i]
-        styles = torch.vstack(styles_array[i*batch_size:(i+1)*batch_size]).to(device)
+        styles = torch.vstack(styles_array[i * batch_size:(i + 1) * batch_size]).to(device)
         img2 = torch.tensor(temp_photos[i]).to(device)
         styles2 = styles + styles_direction
 
@@ -336,10 +365,12 @@ def generate_images(
                 continue
 
             if res == 4:
-                x, img = block_forward(block, x, img, styles2[:, styles_idx:styles_idx+2, :], temp_shapes[k], noise_mode=noise_mode)
+                x, img = block_forward(block, x, img, styles2[:, styles_idx:styles_idx + 2, :], temp_shapes[k],
+                                       noise_mode=noise_mode)
                 styles_idx += 2
             else:
-                x, img = block_forward(block, x, img, styles2[:, styles_idx:styles_idx+3, :], temp_shapes[k], noise_mode=noise_mode)
+                x, img = block_forward(block, x, img, styles2[:, styles_idx:styles_idx + 3, :], temp_shapes[k],
+                                       noise_mode=noise_mode)
                 styles_idx += 3
 
         identity_loss, _ = id_loss(img, img2)
@@ -347,7 +378,7 @@ def generate_images(
         img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255)
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
         image_features = model.encode_image(img)
-        cos_sim = -1*F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
+        cos_sim = -1 * F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
         (identity_loss + cos_sim.sum()).backward(retain_graph=True)
 
         styles_direction.grad[:, [0, 1, 4, 7, 10, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], :] = 0
@@ -366,6 +397,13 @@ def generate_images(
     np.savez(output_filepath, s=styles_direction.cpu().numpy())
 
     print("time passed:", time.time() - t1)
+
+
+def load_image(url_or_path):
+    if url_or_path.startswith("http://") or url_or_path.startswith("https://"):
+        return PILImage.open(requests.get(url_or_path, stream=True).raw)
+    else:
+        return PILImage.open(url_or_path)
 
 
 if __name__ == "__main__":

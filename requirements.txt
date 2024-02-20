@@ -1,13 +1,16 @@
-click==8.1.7
-opencv-python==4.9.0.80
-numpy==1.24.4
-torch==1.13.1
-torchvision==0.14.1
-Pillow==7.0.0
-matplotlib==3.7.4
-werkzeug==3.0.1
+#click==8.1.7
+opencv-python==4.5.5.64
+#numpy==1.24.4
+# Pillow==7.0.0
+#matplotlib==3.7.4
+#werkzeug==3.0.1
 flask==3.0.2
-requests==2.22.0
-scipy==1.10.1
-tqdm==4.66.1
+#requests==2.22.0
+#scipy==1.10.1
+#tqdm==4.66.1
 dlib==19.24.2
+ninja
+ftfy
+#regex
+pyspng
+imageio-ffmpeg==0.4.

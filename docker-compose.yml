@@ -1,6 +1,13 @@
 services:
   frontend:
     build: .
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
     ports:
       - "5000:5000"
     volumes:
