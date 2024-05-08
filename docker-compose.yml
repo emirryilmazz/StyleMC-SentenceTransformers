@@ -19,12 +19,12 @@ services:
         target: /python-docker/model_ir_se50.pth
       - type: bind
         source: ./encoder4editing/e4e_ffhq_encode.pt
-        target: /python-docker/e4e_ffhq_encode.pt
+        target: /python-docker/encoder4editing/e4e_ffhq_encode.pt
       - type: bind
         source: ./encoder4editing/shape_predictor_68_face_landmarks.dat
-        target: /python-docker/shape_predictor_68_face_landmarks.dat
+        target: /python-docker/encoder4editing/shape_predictor_68_face_landmarks.dat
       - type: bind
         source: ./encoder4editing/projected_w.npz
-        target: /python-docker/projected_w.npz
+        target: /python-docker/encoder4editing/projected_w.npz
 volumes:
   myapp:

@@ -17,6 +17,9 @@ import click
 import legacy
 from typing import List, Optional
 
+from transformers import AutoTokenizer, TFAutoModel
+import tensorflow as tf
+
 from sentence_transformers import SentenceTransformer, util
 from PIL import Image as PILImage, ImageFile as PILImageFile
 import requests
@@ -205,6 +208,19 @@ def generate_images(
     text_features = torch.unsqueeze(torch.tensor(text_features), 0).to(device)
     print("shapee:", text_features.shape)
     print("text_features_2_type:", type(text_features))"""
+
+    #Clip turkish
+    """model_name = "mys/distilbert-base-turkish-cased-clip"
+    print('burası 1')
+    print('burası 2')
+    print('burası 3')
+    model_name = "mys/distilbert-base-turkish-cased-clip"
+    base_model = TFAutoModel.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    head_model = tf.keras.models.load_model("./clip_head.h5")
+
+    model, preprocess = clip.load("ViT-B/32")
+    text_features = encode_text(base_model, tokenizer, head_model, text_prompt).numpy()"""
 
 
     model, preprocess = clip.load("ViT-B/32", device=device)
@@ -405,6 +421,41 @@ def load_image(url_or_path):
     else:
         return PILImage.open(url_or_path)
 
+def encode_text(base_model, tokenizer, head_model, texts):
+    tokens = tokenizer(texts, padding=True, return_tensors='tf')
+    embs = base_model(**tokens)[0]
+
+    attention_masks = tf.cast(tokens['attention_mask'], tf.float32)
+    sample_length = tf.reduce_sum(attention_masks, axis=-1, keepdims=True)
+    masked_embs = embs * tf.expand_dims(attention_masks, axis=-1)
+    base_embs = tf.reduce_sum(masked_embs, axis=1) / tf.cast(sample_length, tf.float32)
+    clip_embs = head_model(base_embs)
+    clip_embs /= tf.norm(clip_embs, axis=-1, keepdims=True)
+    return clip_embs
+
+
+    """
+    def encode_text(base_model, tokenizer, head_model, texts):
+    tokens = tokenizer(texts, padding=True, return_tensors='tf')
+    embs = base_model(**tokens)[0]
+
+    attention_mask = tokens['attention_mask']
+    mask = attention_mask.type(torch.float32)
+    mask = torch.where(mask > 0.5, torch.tensor([1.]), torch.tensor([0.]))
+    attention_masks = mask
+    #attention_masks = tf.cast(tokens['attention_mask'], tf.float32)
+
+    sample_length = torch.sum(attention_masks, keepdim=True)
+    #sample_length = tf.reduce_sum(attention_masks, axis=-1, keepdims=True)
+
+    #masked_embs = embs * tf.expand_dims(attention_masks, axis=-1)
+    masked_embs = embs * torch.unsqueeze(attention_masks, dim=-1)
+
+    base_embs = torch.sum(masked_embs) / (sample_length.type(torch.FloatTensor))
+    clip_embs = head_model(base_embs)
+    clip_embs /= torch.norm(clip_embs, dim=-1, keepdim=True)
+    return clip_embs
+    """
 
 if __name__ == "__main__":
     generate_images()
