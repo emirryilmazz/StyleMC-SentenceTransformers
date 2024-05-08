@@ -37,6 +37,7 @@ from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normal
 import PIL.Image
 from PIL import Image
 import matplotlib.pyplot as plt
+from transformers import AutoModel, AutoTokenizer
 
 from torch_utils import misc
 from torch_utils import persistence
@@ -222,13 +223,22 @@ def generate_images(
     model, preprocess = clip.load("ViT-B/32")
     text_features = encode_text(base_model, tokenizer, head_model, text_prompt).numpy()"""
 
+    # dmbdz - bertturk
+    tokenizer = AutoTokenizer.from_pretrained("dbmdz/bert-base-turkish-cased")
+    text_model = AutoModel.from_pretrained("dbmdz/bert-base-turkish-cased")
+    inputs = tokenizer(text_prompt, return_tensors="pt")
+    print('type text', type(inputs))
+    text_features = text_model(**inputs)
+    print('type', type(text_features))
 
+
+    # traditional
     model, preprocess = clip.load("ViT-B/32", device=device)
-    text = clip.tokenize([text_prompt]).to(device)
-    print("text", text.shape)
-    text_features = model.encode_text(text)
-    print("shape_2: ", text_features.shape)
-    print("text_features_type:", type(text_features))
+    #text = clip.tokenize([text_prompt]).to(device)
+    #print("text-traditional", text.shape)
+    #text_features = model.encode_text(text)
+    #print("shape_2: ", text_features.shape)
+    #print("text_features_type:", type(text_features))
 
     # Generate images
     for i in G.parameters():
@@ -296,7 +306,6 @@ def generate_images(
 
     resolution_dict = {256: 6, 512: 7, 1024: 8}
     id_coeff_dict = {"high": 2, "medium": 0.5, "low": 0.1, "none": 0}
-    print('power', identity_power)
     id_coeff = id_coeff_dict[identity_power]
     styles_direction = torch.zeros(1, 26, 512, device=device)
     styles_direction_grad_el2 = torch.zeros(1, 26, 512, device=device)
@@ -357,7 +366,7 @@ def generate_images(
         img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255)
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
         image_features = model.encode_image(img)
-        cos_sim = -1 * F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
+        cos_sim = -1*F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
         (identity_loss + cos_sim.sum()).backward(retain_graph=True)
 
     t1 = time.time()
@@ -394,7 +403,7 @@ def generate_images(
         img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255)
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
         image_features = model.encode_image(img)
-        cos_sim = -1 * F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
+        cos_sim = -1*F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
         (identity_loss + cos_sim.sum()).backward(retain_graph=True)
 
         styles_direction.grad[:, [0, 1, 4, 7, 10, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], :] = 0
@@ -421,6 +430,7 @@ def load_image(url_or_path):
     else:
         return PILImage.open(url_or_path)
 
+"""
 def encode_text(base_model, tokenizer, head_model, texts):
     tokens = tokenizer(texts, padding=True, return_tensors='tf')
     embs = base_model(**tokens)[0]
@@ -433,9 +443,7 @@ def encode_text(base_model, tokenizer, head_model, texts):
     clip_embs /= tf.norm(clip_embs, axis=-1, keepdims=True)
     return clip_embs
 
-
-    """
-    def encode_text(base_model, tokenizer, head_model, texts):
+def encode_text(base_model, tokenizer, head_model, texts):
     tokens = tokenizer(texts, padding=True, return_tensors='tf')
     embs = base_model(**tokens)[0]
 
