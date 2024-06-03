@@ -14,6 +14,7 @@ import random
 import math
 import time
 import click
+import tensorflow as tf
 import legacy
 from typing import List, Optional
 
@@ -33,7 +34,7 @@ from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normal
 import PIL.Image
 from PIL import Image
 import matplotlib.pyplot as plt
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer, TFAutoModel, DistilBertTokenizer
 
 from torch_utils import misc
 from torch_utils import persistence
@@ -453,7 +454,7 @@ def load_image(url_or_path):
     else:
         return PILImage.open(url_or_path)
 
-"""
+#mys encode text
 def encode_text(base_model, tokenizer, head_model, texts):
     tokens = tokenizer(texts, padding=True, return_tensors='tf')
     embs = base_model(**tokens)[0]
@@ -465,7 +466,7 @@ def encode_text(base_model, tokenizer, head_model, texts):
     clip_embs = head_model(base_embs)
     clip_embs /= tf.norm(clip_embs, axis=-1, keepdims=True)
     return clip_embs
-
+"""
 def encode_text(base_model, tokenizer, head_model, texts):
     tokens = tokenizer(texts, padding=True, return_tensors='tf')
     embs = base_model(**tokens)[0]
