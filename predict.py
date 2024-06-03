@@ -75,6 +75,6 @@ class Predictor(cog.Predictor):
                          "--s_input=out/input.npz", "--network=ffhq.pkl"])
 
         res = os.path.join("out", f'f{text_prompt.replace(" ", "_")}_{str(change_power)}.jpeg')
-        out_path = Path(tempfile.mkdtemp()) / "out.png"
+        out_path = Path(tempfile.mkdtemp()) / "out.jpeg"
         shutil.copyfile(res, str(out_path))
         return out_path

@@ -17,10 +17,6 @@ import click
 import legacy
 from typing import List, Optional
 
-from transformers import AutoTokenizer, TFAutoModel
-import tensorflow as tf
-
-from sentence_transformers import SentenceTransformer, util
 from PIL import Image as PILImage, ImageFile as PILImageFile
 import requests
 import torch
@@ -180,7 +176,7 @@ def generate_images(
         for idx, w in enumerate(ws):
             img = G.synthesis(w.unsqueeze(0), noise_mode=noise_mode)
             img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)
-            img = PILImage.fromarray(img[0].cpu().numpy(), 'RGB').save(f'{outdir}/proj{idx:02d}.png')
+            img = PILImage.fromarray(img[0].cpu().numpy(), 'RGB').save(f'{outdir}/proj{idx:02d}.jpeg')
         return
 
     if seeds is None:
@@ -224,21 +220,21 @@ def generate_images(
     text_features = encode_text(base_model, tokenizer, head_model, text_prompt).numpy()"""
 
     # dmbdz - bertturk
-    tokenizer = AutoTokenizer.from_pretrained("dbmdz/bert-base-turkish-cased")
-    text_model = AutoModel.from_pretrained("dbmdz/bert-base-turkish-cased")
-    inputs = tokenizer(text_prompt, return_tensors="pt")
-    print('type text', type(inputs))
-    text_features = text_model(**inputs)
-    print('type', type(text_features))
+    #tokenizer = AutoTokenizer.from_pretrained("dbmdz/bert-base-turkish-cased")
+    #text_model = AutoModel.from_pretrained("dbmdz/bert-base-turkish-cased")
+    #inputs = tokenizer(text_prompt, return_tensors="pt")
+    #print('type text', type(inputs))
+    #text_features = text_model(**inputs)
+    #print('type', type(text_features))
 
 
     # traditional
     model, preprocess = clip.load("ViT-B/32", device=device)
-    #text = clip.tokenize([text_prompt]).to(device)
-    #print("text-traditional", text.shape)
-    #text_features = model.encode_text(text)
-    #print("shape_2: ", text_features.shape)
-    #print("text_features_type:", type(text_features))
+    text = clip.tokenize([text_prompt]).to(device)
+    print("text-traditional", text.shape)
+    text_features = model.encode_text(text)
+    print("shape_2: ", text_features.shape)
+    print("text_features_type:", type(text_features))
 
     # Generate images
     for i in G.parameters():

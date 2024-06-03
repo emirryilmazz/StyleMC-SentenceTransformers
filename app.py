@@ -31,10 +31,7 @@ def predict():
     prompt = request.form['prompt']
     power = request.form['range']
 
-    if f.filename != '':
-        extension = f.filename.split('.')[-1]
-    else:
-        extension = 'jpeg'
+    extension = 'jpeg'
 
     # check if direction exists
     npz_file = 'direction_"' + secure_filename(prompt) + '".npz'
@@ -43,7 +40,7 @@ def predict():
     direction_exists = os.path.isfile(full_file_path)
     new_file = secure_filename(prompt) + '_' + str(power) + '.' + extension
     prompt = '--text_prompt="' + prompt + '"'
-    print(new_file)
+    print('new file', new_file)
     if not direction_exists:
         # find directions
         print(subprocess.run(['python3', 'find_direction.py', prompt, '--resolution=256', '--batch_size=1',
@@ -52,6 +49,7 @@ def predict():
     # check if reference image given
     if f.filename != '':
         # create latent space with reference image
+        print('file given')
         full_file_path = os.path.join(basepath, 'uploads', secure_filename(f.filename))
         f.save(full_file_path)
         file_path = './uploads' + '/' + f.filename
