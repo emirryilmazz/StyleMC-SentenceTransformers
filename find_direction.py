@@ -229,12 +229,25 @@ def generate_images(
 
 
     # traditional
-    model, preprocess = clip.load("ViT-B/32", device=device)
+    """model, preprocess = clip.load("ViT-B/32", device=device)
     text = clip.tokenize([text_prompt]).to(device)
     print("text-traditional", text.shape)
     text_features = model.encode_text(text)
     print("shape_2: ", text_features.shape)
     print("text_features_type:", type(text_features))
+    """
+    # mys
+    model_name = "mys/distilbert-base-turkish-cased-clip"
+    base_model = TFAutoModel.from_pretrained(model_name)
+    tokenizer = DistilBertTokenizer.from_pretrained(model_name)
+    head_model = tf.keras.models.load_model("./turkish-clip/clip_head.h5")
+    clip_model, preprocess = clip.load("ViT-B/32")
+    
+    text_features = encode_text(base_model, tokenizer, head_model, text_prompt)
+    print('type text features', type(text_features))
+    print('shape text features', text_features[0].shape)
+
+
 
     # Generate images
     for i in G.parameters():
@@ -361,7 +374,14 @@ def generate_images(
         identity_loss *= id_coeff
         img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255)
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
-        image_features = model.encode_image(img)
+        # traditional - image_features = model.encode_image(img)
+        #mys
+        img_inputs = torch.stack(preprocess(img).to('cpu'))
+        with torch.no_grad():
+            image_features = clip_model.encode_image(img_inputs).float().to('cpu')
+        image_features /= image_features.norm(dim=-1, keepdim=True)
+        image_features = image_features.detach().numpy()
+
         cos_sim = -1*F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
         (identity_loss + cos_sim.sum()).backward(retain_graph=True)
 
@@ -398,7 +418,14 @@ def generate_images(
         identity_loss *= id_coeff
         img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255)
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
-        image_features = model.encode_image(img)
+        # traditional - image_features = model.encode_image(img)
+        #mys
+        img_inputs = torch.stack(preprocess(img).to('cpu'))
+        with torch.no_grad():
+            image_features = clip_model.encode_image(img_inputs).float().to('cpu')
+        image_features /= image_features.norm(dim=-1, keepdim=True)
+        image_features = image_features.detach().numpy()
+
         cos_sim = -1*F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
         (identity_loss + cos_sim.sum()).backward(retain_graph=True)
 
