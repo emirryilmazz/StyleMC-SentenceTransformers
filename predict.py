@@ -57,12 +57,12 @@ class Predictor(cog.Predictor):
         if f'direction_f{text_prompt.replace(" ", "_")}.npz' not in os.listdir('out'):
             # calculate new directions
             resolution = 256
-            batch_size = 4
+            batch_size = 1
             identity_power = "high"
             subprocess.call(["python", "find_direction.py", f"--text_prompt=f{text_prompt}",
                              f"--resolution={resolution}", f"--batch_size={batch_size}",
                              f"--identity_power={identity_power}", "--outdir=out",
-                             "--trunc=0.7", "--seeds=1-129", "--network=ffhq.pkl"])
+                             "--trunc=0.7", "--seeds=1-3", "--network=ffhq.pkl"])
         # generating encoder4editing/projected_w.npz
         subprocess.call(["python", "encoder4editing/infer.py", "--input_image", f"{str(image)}"])
         # generating out/input.npz

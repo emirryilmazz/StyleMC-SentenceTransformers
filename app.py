@@ -44,7 +44,7 @@ def predict():
     if not direction_exists:
         # find directions
         command = ['python3', 'find_direction.py', prompt, '--resolution=256', '--batch_size=1',
-                              '--identity_power=high', '--outdir=out', '--seeds=1-129', '--network=./ffhq.pkl']
+                              '--identity_power=high', '--outdir=out', '--seeds=1-3', '--network=./ffhq.pkl']
         if f.filename != '':
             full_file_path = os.path.join(basepath, 'uploads', secure_filename(f.filename))
             f.save(full_file_path)

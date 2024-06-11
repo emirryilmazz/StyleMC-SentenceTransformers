@@ -94,7 +94,7 @@ net.eval()
 net.cuda()
 print('Model successfully loaded!')
 
-
+image_path='/home/izma/Desktop/adam.png'
 original_image = Image.open(image_path)
 original_image = original_image.convert("RGB")
 
