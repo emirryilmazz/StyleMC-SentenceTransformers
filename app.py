@@ -43,15 +43,8 @@ def predict():
     print('new file', new_file)
     if not direction_exists:
         # find directions
-        command = ['python3', 'find_direction.py', prompt, '--resolution=256', '--batch_size=1',
-                              '--identity_power=high', '--outdir=out', '--seeds=1-3', '--network=./ffhq.pkl']
-        if f.filename != '':
-            full_file_path = os.path.join(basepath, 'uploads', secure_filename(f.filename))
-            f.save(full_file_path)
-            file_path = './uploads' + '/' + f.filename
-            command.append('--image_input=' + file_path)
-        print('command', command)
-        print(subprocess.run(command))
+        print(subprocess.run(['python3', 'find_direction.py', prompt, '--resolution=256', '--batch_size=1',
+                              '--identity_power=high', '--outdir=out', '--seeds=1-129', '--network=./ffhq.pkl']))
 
     # check if reference image given
     if f.filename != '':

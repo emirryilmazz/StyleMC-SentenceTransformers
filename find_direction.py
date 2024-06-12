@@ -14,7 +14,6 @@ import random
 import math
 import time
 import click
-import tensorflow as tf
 import legacy
 from typing import List, Optional
 
@@ -34,7 +33,7 @@ from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normal
 import PIL.Image
 from PIL import Image
 import matplotlib.pyplot as plt
-from transformers import AutoModel, AutoTokenizer, TFAutoModel, DistilBertTokenizer
+from transformers import AutoModel, AutoTokenizer
 
 from torch_utils import misc
 from torch_utils import persistence
@@ -124,7 +123,6 @@ def num_range(s: str) -> List[int]:
 @click.option('--resolution', help='Resolution of output images', type=int, required=True)
 @click.option('--batch_size', help='Batch Size', type=int, required=True)
 @click.option('--identity_power', help='How much change occurs on the face', type=str, required=True)
-@click.option('--image_input', help='How much change occurs on the face', type=str, required=False) # sonradan ekledim
 def generate_images(
         ctx: click.Context,
         network_pkl: str,
@@ -139,7 +137,6 @@ def generate_images(
         resolution: int,
         batch_size: int,
         identity_power: str,
-        image_input: Optional[str],
 ):
     # parameters print
     # print('params', network_pkl, seeds, truncation_psi, noise_mode, outdir, class_idx, projected_w, projected_w, batch_size, identity_power, text_prompt, resolution)
@@ -163,7 +160,7 @@ def generate_images(
         --network=https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/metfaces.pkl
     """
     print('Loading networks from "%s"...' % network_pkl)
-    device = torch.device('cpu')
+    device = torch.device('cuda')
     with dnnlib.util.open_url(network_pkl) as f:
         G = legacy.load_network_pkl(f)['G_ema'].to(device)  # type: ignore
 
@@ -232,25 +229,12 @@ def generate_images(
 
 
     # traditional
-    """model, preprocess = clip.load("ViT-B/32", device=device)
+    model, preprocess = clip.load("ViT-B/32", device=device)
     text = clip.tokenize([text_prompt]).to(device)
     print("text-traditional", text.shape)
     text_features = model.encode_text(text)
     print("shape_2: ", text_features.shape)
     print("text_features_type:", type(text_features))
-    """
-    # mys
-    model_name = "mys/distilbert-base-turkish-cased-clip"
-    base_model = TFAutoModel.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    head_model = tf.keras.models.load_model("./clip_head.h5")
-    clip_model, preprocess = clip.load("ViT-B/32", device)
-
-    text_features = encode_text(base_model, tokenizer, head_model, text_prompt)
-    print('type text features', type(text_features))
-    print('shape text features', text_features[0].shape)
-
-
 
     # Generate images
     for i in G.parameters():
@@ -377,33 +361,8 @@ def generate_images(
         identity_loss *= id_coeff
         img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255)
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
-        # traditional - image_features = model.encode_image(img)
-
-        # mys
-        # mys eski - img_inputs = torch.stack(preprocess(img).to('cpu'))
-        demo_images = {
-            "deneme": image_input
-        }
-
-        images = {key: Image.open(f"{value}") for key, value in demo_images.items()}
-        img_inputs = torch.stack([preprocess(image).to(device) for image in images.values()])
-
-        print('shapes 1', img_inputs[0].shape)
-        print("img_inputs", img_inputs)
-
-        with torch.no_grad():
-            image_features = clip_model.encode_image(img_inputs).float().to(device)
-
-        image_features /= image_features.norm(dim=-1, keepdim=True)
-        image_features = image_features.detach()
-        text_features_np = text_features[0].numpy()
-        text_features_torch = torch.tensor(text_features_np)
-        print('text type', type(text_features[0]))
-        print('text type', type(text_features_torch))
-        print('text type', type(image_features))
-        print('text type', type(F.cosine_similarity(image_features, text_features_torch.unsqueeze(0))))
-        cos_sim = -1*F.cosine_similarity(image_features, text_features_torch.unsqueeze(0))
-
+        image_features = model.encode_image(img)
+        cos_sim = -1*F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
         (identity_loss + cos_sim.sum()).backward(retain_graph=True)
 
     t1 = time.time()
@@ -439,24 +398,8 @@ def generate_images(
         identity_loss *= id_coeff
         img = (img.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255)
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
-        # traditional - image_features = model.encode_image(img)
-        #mys
-        # eski - img_inputs = torch.stack(preprocess(img).to('cpu'))
-
-        img_inputs = torch.stack([preprocess(image).to(device) for image in images.values()])
-        print("img_inputs", img_inputs)
-        with torch.no_grad():
-            image_features = clip_model.encode_image(img_inputs).float().to(device)
-
-        image_features /= image_features.norm(dim=-1, keepdim=True)
-        image_features = image_features.detach()
-        text_features_np = text_features[0].numpy()
-        text_features_torch = torch.tensor(text_features_np)
-        print('text type', type(text_features[0]))
-        print('text type', type(text_features_torch))
-        print('text type', type(image_features))
-        print('text type', type(F.cosine_similarity(image_features, text_features_torch.unsqueeze(0))))
-        cos_sim = -1*F.cosine_similarity(image_features, text_features_torch.unsqueeze(0))
+        image_features = model.encode_image(img)
+        cos_sim = -1*F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
         (identity_loss + cos_sim.sum()).backward(retain_graph=True)
 
         styles_direction.grad[:, [0, 1, 4, 7, 10, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], :] = 0
@@ -483,7 +426,7 @@ def load_image(url_or_path):
     else:
         return PILImage.open(url_or_path)
 
-#mys encode text
+"""
 def encode_text(base_model, tokenizer, head_model, texts):
     tokens = tokenizer(texts, padding=True, return_tensors='tf')
     embs = base_model(**tokens)[0]
@@ -495,7 +438,7 @@ def encode_text(base_model, tokenizer, head_model, texts):
     clip_embs = head_model(base_embs)
     clip_embs /= tf.norm(clip_embs, axis=-1, keepdims=True)
     return clip_embs
-"""
+
 def encode_text(base_model, tokenizer, head_model, texts):
     tokens = tokenizer(texts, padding=True, return_tensors='tf')
     embs = base_model(**tokens)[0]
@@ -520,8 +463,3 @@ def encode_text(base_model, tokenizer, head_model, texts):
 
 if __name__ == "__main__":
     generate_images()
-
-# ünlüyü al
-# sakallı ünlüyü al
-# benzeyen bir ünlüyü al
-# 
