@@ -87,8 +87,7 @@ def block_forward(self, x, img, ws, shapes, force_fp32=False, fused_modconv=None
 
     assert x.dtype == dtype
     assert img is None or img.dtype == torch.float32
-    print(type(img))
-    
+
     return x, img
 
 
@@ -203,11 +202,8 @@ def generate_images(
     text_model = SentenceTransformer('sentence-transformers/clip-ViT-B-32-multilingual-v1')
     # text_features = text_model.encode(text.tolist())
     text_features = text_model.encode(text_prompt)
-    print("text_features:", text_features.shape)
     text_features = torch.unsqueeze(torch.tensor(text_features), 0).to(device)
-    print("shapee:", text_features.shape)
-    print("text_features_2_type:", type(text_features))
-    
+
     """
     
     #Clip turkish
@@ -394,13 +390,10 @@ def generate_images(
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
 
         image_features = model.encode_image(img)
-        print("1111111111111111111")
 
         #image_inputs=img_processor(images=img, return_tensors="pt")
-        print("22222222222222222222222222")
         #image_features=model(**image_inputs)
 
-        print(f"shape img features {image_features.shape}"  )
 
 
         #image_features = model.encode(img)
@@ -413,7 +406,6 @@ def generate_images(
         styles_direction *= 0
 
     for i in range(math.ceil(len(seeds) / batch_size)):
-        print(i * batch_size, "processed", time.time() - t1)
 
         seed = seeds[i]
         styles = torch.vstack(styles_array[i * batch_size:(i + 1) * batch_size]).to(device)
@@ -442,8 +434,6 @@ def generate_images(
         img = (transf(img.permute(0, 3, 1, 2)) / 255).sub_(mean).div_(std)
         image_features = model.encode_image(img)
         
-        print(f"shape img features {image_features.shape}"  )
-
         cos_sim = -1 * F.cosine_similarity(image_features, (text_features[0]).unsqueeze(0))
         (identity_loss + cos_sim.sum()).backward(retain_graph=True)
 
@@ -462,7 +452,6 @@ def generate_images(
     output_filepath = f'{outdir}/direction_' + text_prompt.replace(" ", "_") + '.npz'
     np.savez(output_filepath, s=styles_direction.cpu().numpy())
 
-    print("time passed:", time.time() - t1)
 
 
 def load_image(url_or_path):

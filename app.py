@@ -6,6 +6,8 @@ from werkzeug.utils import secure_filename
 import subprocess
 import random
 
+from remove_specials import remove_specials
+
 app = Flask(__name__)
 
 
@@ -34,13 +36,14 @@ def predict():
     extension = 'jpeg'
 
     # check if direction exists
-    npz_file = 'direction_"' + secure_filename(prompt) + '".npz'
+    npz_file = 'direction_"' + remove_specials(prompt) + '".npz'
     basepath = os.path.dirname(__file__)
     full_file_path = os.path.join(basepath, 'out', npz_file)
     direction_exists = os.path.isfile(full_file_path)
-    new_file = secure_filename(prompt) + '_' + str(power) + '.' + extension
+    new_file = remove_specials(prompt) + '_' + str(power) + '.' + extension
     prompt = '--text_prompt="' + prompt + '"'
     print('new file', new_file)
+    print('new file name', npz_file)
     if not direction_exists:
         # find directions
         print(subprocess.run(['python3', 'find_direction.py', prompt, '--resolution=256', '--batch_size=1',
@@ -50,7 +53,8 @@ def predict():
     if f.filename != '':
         # create latent space with reference image
         print('file given')
-        full_file_path = os.path.join(basepath, 'uploads', secure_filename(f.filename))
+        full_file_path = os.path.join(basepath, 'uploads', remove_specials(f.filename))
+        print('future file path', full_file_path)
         f.save(full_file_path)
         file_path = './uploads' + '/' + f.filename
         print('reference file: ', file_path)
@@ -69,7 +73,6 @@ def predict():
              '--network=./ffhq.pkl']))
     print(subprocess.run(['python3', 'generate_fromS.py', prompt, '--change_power=' + power, '--outdir=out',
                           '--s_input=out/input.npz', '--network=./ffhq.pkl']))
-
     return new_file
 
 
